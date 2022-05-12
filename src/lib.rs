@@ -1,6 +1,6 @@
 use std::{
     io,
-    net::{Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs, UdpSocket},
+    net::{SocketAddr, ToSocketAddrs},
     ops::Add,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -32,10 +32,10 @@ pub fn keep_packet(config: &ConditionerConfig) -> bool {
     !(n < config.packet_loss)
 }
 
-/// Thin wrapper around a `UdpSocket` to provide mock testing of packet loss/latency.
-pub struct ConditionedUdpSocket {
+/// Thin wrapper around a `SocketLike` to provide mock testing of packet loss/latency.
+pub struct Conditioner<S> {
     pub config: ConditionerConfig,
-    socket: UdpSocket,
+    socket: S,
     queue: Arc<Mutex<TimeQueue<RecvFrom>>>,
 }
 
@@ -61,7 +61,7 @@ impl Default for ConditionerConfig {
     }
 }
 
-pub trait UdpSocketLike {
+pub trait SocketLike {
     fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()>;
     fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
         match self.recv_from(buf) {
@@ -74,7 +74,28 @@ pub trait UdpSocketLike {
     fn send_to<A: ToSocketAddrs>(&self, buf: &[u8], addr: A) -> io::Result<usize>;
 }
 
-impl UdpSocketLike for ConditionedUdpSocket {
+impl SocketLike for std::net::UdpSocket {
+    fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.set_nonblocking(nonblocking)
+    }
+    fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+        self.recv(buf)
+    }
+    fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        self.recv_from(buf)
+    }
+    fn send(&self, buf: &[u8]) -> io::Result<usize> {
+        self.send(buf)
+    }
+    fn send_to<A: ToSocketAddrs>(&self, buf: &[u8], addr: A) -> io::Result<usize> {
+        self.send_to(buf, addr)
+    }
+}
+
+impl<S> SocketLike for Conditioner<S>
+where
+    S: SocketLike,
+{
     fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
         self.socket.set_nonblocking(nonblocking)
     }
@@ -121,106 +142,16 @@ impl UdpSocketLike for ConditionedUdpSocket {
     }
 }
 
-impl ConditionedUdpSocket {
-    pub fn bind<A: ToSocketAddrs>(
-        config: ConditionerConfig,
-        addr: A,
-    ) -> io::Result<ConditionedUdpSocket> {
-        let socket = UdpSocket::bind(addr)?;
-        println!("binding to {:?}", socket);
+impl<S> Conditioner<S>
+where
+    S: SocketLike,
+{
+    pub fn new(config: ConditionerConfig, socket: S) -> Conditioner<S> {
         let queue = Arc::new(Mutex::new(TimeQueue::new()));
-        Ok(ConditionedUdpSocket {
+        Conditioner {
             socket,
             queue,
             config,
-        })
-    }
-
-    pub fn peer_addr(&self) -> io::Result<SocketAddr> {
-        self.socket.peer_addr()
-    }
-
-    pub fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.socket.local_addr()
-    }
-
-    pub fn try_clone(&self) -> io::Result<UdpSocket> {
-        self.socket.try_clone()
-    }
-
-    pub fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
-        self.socket.set_read_timeout(dur)
-    }
-
-    pub fn set_write_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
-        self.socket.set_write_timeout(dur)
-    }
-
-    pub fn read_timeout(&self) -> io::Result<Option<Duration>> {
-        self.socket.read_timeout()
-    }
-
-    pub fn write_timeout(&self) -> io::Result<Option<Duration>> {
-        self.socket.write_timeout()
-    }
-
-    pub fn set_broadcast(&self, broadcast: bool) -> io::Result<()> {
-        self.socket.set_broadcast(broadcast)
-    }
-
-    pub fn broadcast(&self) -> io::Result<bool> {
-        self.socket.broadcast()
-    }
-
-    pub fn set_multicast_loop_v4(&self, multicast_loop_v4: bool) -> io::Result<()> {
-        self.socket.set_multicast_loop_v4(multicast_loop_v4)
-    }
-
-    pub fn multicast_loop_v4(&self) -> io::Result<bool> {
-        self.socket.multicast_loop_v4()
-    }
-
-    pub fn set_multicast_ttl_v4(&self, multicast_ttl_v4: u32) -> io::Result<()> {
-        self.socket.set_multicast_ttl_v4(multicast_ttl_v4)
-    }
-
-    pub fn multicast_ttl_v4(&self) -> io::Result<u32> {
-        self.socket.multicast_ttl_v4()
-    }
-
-    pub fn set_multicast_loop_v6(&self, multicast_loop_v6: bool) -> io::Result<()> {
-        self.socket.set_multicast_loop_v6(multicast_loop_v6)
-    }
-
-    pub fn multicast_loop_v6(&self) -> io::Result<bool> {
-        self.socket.multicast_loop_v6()
-    }
-
-    pub fn ttl(&self) -> io::Result<u32> {
-        self.socket.ttl()
-    }
-
-    pub fn join_multicast_v4(&self, multiaddr: &Ipv4Addr, interface: &Ipv4Addr) -> io::Result<()> {
-        self.socket.join_multicast_v4(multiaddr, interface)
-    }
-
-    pub fn join_multicast_v6(&self, multiaddr: &Ipv6Addr, interface: u32) -> io::Result<()> {
-        self.socket.join_multicast_v6(multiaddr, interface)
-    }
-
-    pub fn leave_multicast_v4(&self, multiaddr: &Ipv4Addr, interface: &Ipv4Addr) -> io::Result<()> {
-        self.socket.leave_multicast_v4(multiaddr, interface)
-    }
-
-    pub fn leave_multicast_v6(&self, multiaddr: &Ipv6Addr, interface: u32) -> io::Result<()> {
-        self.socket.leave_multicast_v6(multiaddr, interface)
-    }
-
-    pub fn take_error(&self) -> io::Result<Option<io::Error>> {
-        self.socket.take_error()
-    }
-
-    pub fn connect<A: ToSocketAddrs>(&self, addr: A) -> io::Result<()> {
-        self.socket.connect(addr)
+        }
     }
 }

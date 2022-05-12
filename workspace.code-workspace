@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "..\\udp-screech"
+		},
+		{
+			"path": "..\\renet"
+		}
+	],
+	"settings": {}
+}

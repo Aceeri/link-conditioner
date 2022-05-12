@@ -1,6 +1,8 @@
-use link_conditioner::{ConditionerConfig, UdpConditioner};
+use link_conditioner::{Conditioner, ConditionerConfig};
+
+use std::net::UdpSocket;
 
 pub fn main() {
-    let conditioner =
-        UdpConditioner::bind_conditioned(ConditionerConfig::default(), ("0.0.0.0", 0)).unwrap();
+    let socket = UdpSocket::bind(("0.0.0.0", 0)).unwrap();
+    let conditioner = Conditioner::new(ConditionerConfig::default(), socket);
 }
