@@ -1,6 +1,6 @@
 use std::{
     io,
-    net::{SocketAddr, ToSocketAddrs},
+    net::SocketAddr,
     ops::Add,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -28,11 +28,12 @@ pub fn instant(config: &ConditionerConfig) -> Instant {
 
 pub fn keep_packet(config: &ConditionerConfig) -> bool {
     let n = rand::random::<f32>();
-    println!("{} < {}", n, config.packet_loss);
+    //println!("{} < {}", n, config.packet_loss);
     !(n < config.packet_loss)
 }
 
 /// Thin wrapper around a `SocketLike` to provide mock testing of packet loss/latency.
+#[derive(Debug)]
 pub struct Conditioner<S> {
     pub config: ConditionerConfig,
     socket: S,
@@ -45,6 +46,7 @@ pub struct RecvFrom {
     pub data: Vec<u8>,
 }
 
+#[derive(Debug)]
 pub struct ConditionerConfig {
     pub latency: Duration,
     pub jitter: Duration,
@@ -71,7 +73,7 @@ pub trait SocketLike {
     }
     fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)>;
     fn send(&self, buf: &[u8]) -> io::Result<usize>;
-    fn send_to<A: ToSocketAddrs>(&self, buf: &[u8], addr: A) -> io::Result<usize>;
+    fn send_to(&self, buf: &[u8], addr: SocketAddr) -> io::Result<usize>;
 }
 
 impl SocketLike for std::net::UdpSocket {
@@ -87,7 +89,7 @@ impl SocketLike for std::net::UdpSocket {
     fn send(&self, buf: &[u8]) -> io::Result<usize> {
         self.send(buf)
     }
-    fn send_to<A: ToSocketAddrs>(&self, buf: &[u8], addr: A) -> io::Result<usize> {
+    fn send_to(&self, buf: &[u8], addr: SocketAddr) -> io::Result<usize> {
         self.send_to(buf, addr)
     }
 }
@@ -102,14 +104,15 @@ where
 
     fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
         if let Ok(mut queue) = self.queue.try_lock() {
-            if let Ok((_received, addr)) = self.socket.recv_from(buf) {
+            let mut temp_buf = [0; 16384];
+            if let Ok((received, addr)) = self.socket.recv_from(&mut temp_buf) {
                 let instant = instant(&self.config);
                 if keep_packet(&self.config) {
                     queue.add_item(
                         instant,
                         RecvFrom {
                             addr: addr,
-                            data: buf.to_vec(),
+                            data: temp_buf[..received].to_vec(),
                         },
                     );
                 }
@@ -137,7 +140,7 @@ where
         self.socket.send(buf)
     }
 
-    fn send_to<A: ToSocketAddrs>(&self, buf: &[u8], addr: A) -> io::Result<usize> {
+    fn send_to(&self, buf: &[u8], addr: SocketAddr) -> io::Result<usize> {
         self.socket.send_to(buf, addr)
     }
 }
@@ -153,5 +156,9 @@ where
             queue,
             config,
         }
+    }
+
+    pub fn into_socket(self) -> S {
+        self.socket
     }
 }
