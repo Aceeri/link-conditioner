@@ -1,15 +1,15 @@
 // Swiped from naia's link conditioner.
 
-use std::{cmp::Ordering, collections::BinaryHeap, time::Instant};
+use std::{cmp::Ordering, collections::BinaryHeap, fmt::Debug, time::Instant};
 
 /// A queue for items marked by time, will only ever pop items from the queue if
 /// the time
-#[derive(Clone)]
-pub struct TimeQueue<T: Eq + PartialEq> {
+#[derive(Debug, Clone)]
+pub struct TimeQueue<T: Debug + Eq + PartialEq> {
     queue: BinaryHeap<ItemContainer<T>>,
 }
 
-impl<T: Eq + PartialEq> Default for TimeQueue<T> {
+impl<T: Debug + Eq + PartialEq> Default for TimeQueue<T> {
     fn default() -> Self {
         Self {
             queue: BinaryHeap::default(),
@@ -17,7 +17,7 @@ impl<T: Eq + PartialEq> Default for TimeQueue<T> {
     }
 }
 
-impl<T: Eq + PartialEq> TimeQueue<T> {
+impl<T: Debug + Eq + PartialEq> TimeQueue<T> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -64,19 +64,19 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct ItemContainer<T: Eq + PartialEq> {
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ItemContainer<T: Debug + Eq + PartialEq> {
     pub instant: Instant,
     pub item: T,
 }
 
-impl<T: Eq + PartialEq> Ord for ItemContainer<T> {
+impl<T: Debug + Eq + PartialEq> Ord for ItemContainer<T> {
     fn cmp(&self, other: &ItemContainer<T>) -> Ordering {
         other.instant.cmp(&self.instant)
     }
 }
 
-impl<T: Eq + PartialEq> PartialOrd for ItemContainer<T> {
+impl<T: Debug + Eq + PartialEq> PartialOrd for ItemContainer<T> {
     fn partial_cmp(&self, other: &ItemContainer<T>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
