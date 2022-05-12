@@ -32,6 +32,16 @@ pub struct ConditionerConfig {
     pub packet_loss: f32,
 }
 
+impl Default for ConditionerConfig {
+    fn default() -> Self {
+        Self {
+            latency: Duration::ZERO,
+            jitter: Duration::ZERO,
+            packet_loss: 0.0,
+        }
+    }
+}
+
 impl UdpConditioner {
     pub fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<UdpConditioner> {
         let socket = UdpSocket::bind(addr)?;
@@ -121,19 +131,19 @@ impl UdpConditioner {
                                 data: buf.to_vec(),
                             },
                         );
+                    }
 
-                        if queue.has_item() {
-                            if let Some(item) = queue.pop_item() {
-                                for (index, byte) in item.data.iter().enumerate() {
-                                    if buf.len() > index {
-                                        buf[index] = *byte;
-                                    } else {
-                                        return Ok((buf.len(), item.addr));
-                                    }
+                    if queue.has_item() {
+                        if let Some(item) = queue.pop_item() {
+                            for (index, byte) in item.data.iter().enumerate() {
+                                if buf.len() > index {
+                                    buf[index] = *byte;
+                                } else {
+                                    return Ok((buf.len(), item.addr));
                                 }
-
-                                return Ok((item.data.len(), item.addr));
                             }
+
+                            return Ok((item.data.len(), item.addr));
                         }
                     }
                 }
